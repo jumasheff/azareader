@@ -1,13 +1,13 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use regex::Regex;
 use reqwest::Proxy;
 use std::{io::Read, time::Duration};
 use tauri::{
     api::process::{Command, CommandEvent},
     Manager, Window,
 };
-use regex::Regex;
 
 fn replace_resource_links(page_source: &str, base_url: &str) -> String {
     let correct_base_url = if base_url.ends_with('/') {
@@ -15,9 +15,21 @@ fn replace_resource_links(page_source: &str, base_url: &str) -> String {
     } else {
         format!("{}/", base_url)
     };
-    let re = Regex::new(r#"href="/(.*?)""#).unwrap();
-    let new_page_source = re.replace_all(&page_source, format!("href=\"{}$1\"", correct_base_url).as_str());
-    new_page_source.to_string()
+    let replacements = [
+        (
+            r#"href="/(.*?)""#,
+            format!("href=\"{}$1\"", correct_base_url),
+        ),
+        (r#"src="/(.*?)""#, format!("src=\"{}$1\"", correct_base_url)),
+    ];
+    let mut new_page_source = page_source.to_string();
+    for &(pattern, ref replacement) in &replacements {
+        let re = Regex::new(pattern).unwrap();
+        new_page_source = re
+            .replace_all(&new_page_source, replacement.as_str())
+            .to_string();
+    }
+    new_page_source
 }
 
 fn fetch_url_content(url: &str) -> String {
@@ -55,14 +67,17 @@ fn main() {
                     .spawn()
                     .expect("Failed to spawn packaged node");
                 while let Some(event) = rx.recv().await {
-                    if let CommandEvent::Stdout(line) = event {
-                        println!("line: {}", line);
-                        window
-                            .emit("message", Some(format!("'{}'", line)))
-                            .expect("failed to emit event");
-                        
-                        child.write("message from Rust\n".as_bytes()).unwrap();
-                    }
+                    let line = match event {
+                        CommandEvent::Stdout(line) => line,
+                        CommandEvent::Stderr(line) => line,
+                        _ => continue,
+                    };
+                    println!("line: {}", line);
+                    window
+                        .emit("message", Some(format!("'{}'", line)))
+                        .expect("failed to emit event");
+
+                    child.write("message from Rust\n".as_bytes()).unwrap();
                 }
             });
 
