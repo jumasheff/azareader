@@ -5,6 +5,7 @@ import "./App.css";
 function App() {
   const superInfo = "https://azattyk.org";
   const [pageSource, setPageSource] = useState("<p>Greetings!</p>");
+  const [isStart, setIsStart] = useState(false);
 
   async function sendRequestToBackend(URL: string) {
     const msg: string = await invoke("greet", { name: URL });
@@ -12,8 +13,12 @@ function App() {
   }
 
   useEffect(() => {
-    sendRequestToBackend(superInfo);
+    if (isStart) {
+      sendRequestToBackend(superInfo);
+    }
+  }, [isStart]);
 
+  useEffect(() => {
     function handleMessage(event: MessageEvent) {
       if (event.data.type === "linkClicked") {
         let urlObj = new URL(event.data.href);
@@ -21,6 +26,8 @@ function App() {
           urlObj = new URL(superInfo + urlObj.pathname);
         }
         sendRequestToBackend(urlObj.href);
+      } else {
+        console.log(event.data);
       }
     }
 
@@ -67,8 +74,12 @@ function App() {
 
   const srcDoc = pageSource.replace("</body>", script + "</body>");
 
+  if (!isStart) {
+    return <button onClick={() => setIsStart(true)}>Start</button>;
+  }
+
   return (
-    <body style={style}>
+    <div style={style}>
       <iframe
         srcDoc={srcDoc}
         style={iFrameStyle}
@@ -76,7 +87,7 @@ function App() {
         width="100%"
         height="100vh"
       />
-    </body>
+    </div>
   );
 }
 
