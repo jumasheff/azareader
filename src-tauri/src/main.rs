@@ -7,6 +7,18 @@ use tauri::{
     api::process::{Command, CommandEvent},
     Manager, Window,
 };
+use regex::Regex;
+
+fn replace_resource_links(page_source: &str, base_url: &str) -> String {
+    let correct_base_url = if base_url.ends_with('/') {
+        base_url.to_string()
+    } else {
+        format!("{}/", base_url)
+    };
+    let re = Regex::new(r#"href="/(.*?)""#).unwrap();
+    let new_page_source = re.replace_all(&page_source, format!("href=\"{}$1\"", correct_base_url).as_str());
+    new_page_source.to_string()
+}
 
 fn fetch_url_content(url: &str) -> String {
     let raw_proxy = format!("127.0.0.1:18080");
@@ -29,7 +41,8 @@ fn fetch_url_content(url: &str) -> String {
 fn greet(name: &str) -> String {
     println!("Hello, {}!", name);
     let content = fetch_url_content(&name);
-    content
+    let new_content = replace_resource_links(&content, &name);
+    new_content
 }
 
 fn main() {
@@ -43,6 +56,7 @@ fn main() {
                     .expect("Failed to spawn packaged node");
                 while let Some(event) = rx.recv().await {
                     if let CommandEvent::Stdout(line) = event {
+                        println!("line: {}", line);
                         window
                             .emit("message", Some(format!("'{}'", line)))
                             .expect("failed to emit event");
